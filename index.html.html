@@ -1,0 +1,214 @@
+﻿
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>智慧物流倉儲系統｜教學版 Web WMS</title>
+<style>
+/* ==========================================================================
+   CSS 區：只控制外觀，不處理物流資料
+   ========================================================================== */
+:root{--bg:#f4f6f8;--card:#fff;--text:#18212b;--muted:#667085;--line:#e4e7ec;--accent:#1f5f8b;--ok:#16794b;--warn:#b54708;--danger:#b42318}
+*{box-sizing:border-box}body{margin:0;font-family:"Microsoft JhengHei",Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:#183b56;color:#fff;padding:18px 24px}header h1{margin:0;font-size:24px}header p{margin:5px 0 0;opacity:.8}
+nav{display:flex;gap:8px;padding:14px 20px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0}
+nav button{border:0;background:#eef2f6;padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:700}
+nav button.active{background:#183b56;color:#fff}
+main{max-width:1100px;margin:22px auto;padding:0 18px}.page{display:none}.page.active{display:block}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:0 2px 8px #00000008}
+.metric{font-size:30px;font-weight:800;margin-top:8px}.muted{color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+label{font-weight:700;display:block;margin:12px 0 6px}input,select{width:100%;padding:12px;border:1px solid #cfd4dc;border-radius:8px;font-size:17px;background:#fff}
+.bigscan{font-size:22px;border:2px solid #98a2b3}.actions{display:flex;gap:12px;margin-top:18px}.actions button,.primary{border:0;border-radius:9px;padding:13px 18px;font-size:16px;font-weight:800;cursor:pointer}
+.in{background:#d1fadf;color:#05603a}.out{background:#fee4e2;color:#912018}.primary{background:#183b56;color:#fff}
+.productbox{margin-top:16px;padding:16px;background:#f8fafc;border-radius:10px;border:1px solid var(--line);line-height:1.9}
+table{width:100%;border-collapse:collapse;background:#fff}th,td{padding:11px;border-bottom:1px solid var(--line);text-align:left}th{background:#f8fafc}
+.badge{padding:4px 8px;border-radius:999px;font-size:12px;font-weight:800}.normal{background:#d1fadf;color:#05603a}.low{background:#fef0c7;color:#93370d}
+.notice{padding:12px;border-radius:8px;margin-top:12px;display:none}.success{display:block;background:#d1fadf;color:#05603a}.error{display:block;background:#fee4e2;color:#912018}
+.toolbar{display:flex;gap:10px;margin:12px 0}.toolbar button{padding:9px 12px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer}
+@media(max-width:760px){.grid,.two{grid-template-columns:1fr}nav{overflow:auto}}
+</style>
+</head>
+<body>
+<!-- =========================================================================
+     HTML 畫面區開始
+     ========================================================================= -->
+<header><h1>📦 智慧物流倉儲系統</h1><p>物流資訊科技實作｜Barcode + Web WMS</p></header>
+<!-- 導覽列：切換 Dashboard、掃碼、庫存、交易紀錄 -->
+<nav>
+<button data-page="dashboard" class="active">Dashboard</button>
+<button data-page="scan">掃碼入／出庫</button>
+<button data-page="stock">即時庫存</button>
+<button data-page="history">交易紀錄</button>
+</nav>
+<main>
+<!-- [功能1] DASHBOARD
+     JavaScript 的 render() 會把計算結果寫入 todayIn、todayOut、
+     totalStock 與 lowStock 這些位置。 -->
+<section id="dashboard" class="page active">
+<h2>Dashboard</h2>
+<div class="grid">
+<div class="card"><div class="muted">今日入庫量</div><div id="todayIn" class="metric">0</div></div>
+<div class="card"><div class="muted">今日出庫量</div><div id="todayOut" class="metric">0</div></div>
+<div class="card"><div class="muted">目前總庫存</div><div id="totalStock" class="metric">0</div></div>
+</div>
+<div class="card" style="margin-top:16px"><h3>⚠️ 低庫存商品（≤ 5）</h3><div id="lowStock"></div></div>
+</section>
+
+<!-- [功能2] 掃碼入／出庫
+     條碼槍會把條碼當作鍵盤文字輸入到 id="barcode"。
+     例如掃 P001，輸入框就得到 P001。 -->
+<section id="scan" class="page">
+<h2>掃碼入／出庫</h2>
+<div class="two">
+<div class="card">
+<label>掃描商品條碼</label>
+<input id="barcode" class="bigscan" placeholder="請掃描，例如 P001" autofocus>
+<div id="productInfo" class="productbox">等待掃描商品條碼…</div>
+<label>數量</label><input id="qty" type="number" min="1" value="1">
+<div class="actions"><button class="in" onclick="transact('入庫')">📥 確認入庫</button><button class="out" onclick="transact('出庫')">📤 確認出庫</button></div>
+<div id="message" class="notice"></div>
+</div>
+<div class="card">
+<h3>課堂操作提示</h3>
+<p>1. USB 條碼掃描器會像鍵盤一樣輸入 P001～P010。</p>
+<p>2. 掃描後系統自動找到商品名稱、儲位與庫存。</p>
+<p>3. 選擇數量後按入庫或出庫，系統會留下時間紀錄。</p>
+<p>4. Dashboard 與即時庫存會同步更新。</p>
+<p class="muted">提示：沒有掃描器時，也可以直接鍵盤輸入 P001 測試。</p>
+</div>
+</div>
+</section>
+
+<!-- [功能3] 即時庫存
+     tbody id="stockBody" 本身沒有固定資料，
+     JavaScript render() 會依 products 自動產生每一列。 -->
+<section id="stock" class="page">
+<h2>即時庫存</h2><div class="card"><table><thead><tr><th>商品編號</th><th>商品名稱</th><th>儲位</th><th>目前庫存</th><th>狀態</th></tr></thead><tbody id="stockBody"></tbody></table></div>
+</section>
+
+<!-- [功能4] 交易紀錄
+     每次成功入庫／出庫後，transact() 都會新增一筆 history。
+     render() 再把 history 顯示在 historyBody。 -->
+<section id="history" class="page">
+<h2>交易紀錄</h2>
+<div class="toolbar"><button onclick="exportCSV()">匯出 CSV</button><button onclick="resetDemo()">重設教學資料</button></div>
+<div class="card"><table><thead><tr><th>時間</th><th>商品編號</th><th>商品名稱</th><th>作業</th><th>數量</th><th>作業後庫存</th></tr></thead><tbody id="historyBody"></tbody></table></div>
+</section>
+</main>
+<script>
+/* ==========================================================================
+   JavaScript 系統邏輯區
+   從這裡開始才真正處理商品、庫存、交易與 Dashboard。
+   ========================================================================== */
+/* --------------------------------------------------------------------------
+   [步驟1] 商品主檔
+   code = 條碼內容
+   name = 商品名稱
+   loc = 儲位
+   stock = 初始庫存
+   -------------------------------------------------------------------------- */
+const initialProducts=[
+{code:"P001",name:"可口可樂 330ml",loc:"A-01",stock:20},
+{code:"P002",name:"礦泉水 600ml",loc:"A-02",stock:30},
+{code:"P003",name:"泡麵",loc:"B-01",stock:15},
+{code:"P004",name:"洋芋片",loc:"B-02",stock:12},
+{code:"P005",name:"綠茶 600ml",loc:"A-03",stock:18},
+{code:"P006",name:"餅乾",loc:"B-03",stock:10},
+{code:"P007",name:"衛生紙",loc:"C-01",stock:8},
+{code:"P008",name:"洗衣精",loc:"C-02",stock:5},
+{code:"P009",name:"咖啡",loc:"A-04",stock:9},
+{code:"P010",name:"巧克力",loc:"B-04",stock:4}
+];
+/* [步驟2] 讀取商品資料
+   如果瀏覽器以前存過資料，就讀舊資料；
+   否則使用 initialProducts。 */
+let products=JSON.parse(localStorage.getItem("wms_products")||"null")||structuredClone(initialProducts);
+/* 讀取以前的出入庫交易紀錄 */
+let history=JSON.parse(localStorage.getItem("wms_history")||"[]");
+const $=id=>document.getElementById(id);
+/* --------------------------------------------------------------------------
+   [步驟3] save()
+   將目前商品庫存與交易紀錄存入 localStorage。
+   這就是為什麼重新整理網頁後資料仍可保留。
+   -------------------------------------------------------------------------- */
+function save(){localStorage.setItem("wms_products",JSON.stringify(products));localStorage.setItem("wms_history",JSON.stringify(history))}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.page").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.page).classList.add("active");if(b.dataset.page==="scan")setTimeout(()=>$("barcode").focus(),50);render()});
+$("barcode").addEventListener("input",showProduct);
+$("barcode").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();showProduct();$("qty").focus();}});
+/* --------------------------------------------------------------------------
+   [步驟4] getProduct()
+   讀取條碼輸入框，例如 P001，再到 products 尋找相同 code。
+   -------------------------------------------------------------------------- */
+function getProduct(){return products.find(p=>p.code===$("barcode").value.trim().toUpperCase())}
+/* --------------------------------------------------------------------------
+   [步驟5] showProduct()
+   找到商品後，把商品編號、名稱、儲位、庫存顯示在 productInfo。
+   -------------------------------------------------------------------------- */
+function showProduct(){let p=getProduct();$("productInfo").innerHTML=p?`<b>${p.code}｜${p.name}</b><br>儲位：${p.loc}<br>目前庫存：<b>${p.stock}</b>`:"等待有效商品條碼…";}
+/* --------------------------------------------------------------------------
+   [步驟6] transact(type) —— 整套 WMS 最核心的功能
+
+   type = "入庫"：
+       product.stock += 數量
+
+   type = "出庫"：
+       product.stock -= 數量
+
+   同時：
+   1. 檢查商品與數量
+   2. 出庫時檢查庫存是否足夠
+   3. 更新 stock
+   4. 新增 history
+   5. save()
+   6. render()
+   -------------------------------------------------------------------------- */
+function transact(type){
+ let p=getProduct(),q=parseInt($("qty").value),m=$("message");
+ if(!p||!q||q<1){m.className="notice error";m.textContent="請先掃描有效條碼並輸入正確數量。";return}
+ if(type==="出庫"&&p.stock<q){m.className="notice error";m.textContent=`庫存不足，目前只有 ${p.stock} 件。`;return}
+ p.stock+=type==="入庫"?q:-q;
+ history.unshift({time:new Date().toLocaleString("zh-TW",{hour12:false}),date:new Date().toLocaleDateString("zh-TW"),code:p.code,name:p.name,type,qty:q,after:p.stock});
+ save();m.className="notice success";m.textContent=`${p.name} ${type} ${q} 件成功，目前庫存 ${p.stock} 件。`;
+ $("qty").value=1;showProduct();render();$("barcode").select();
+}
+/* --------------------------------------------------------------------------
+   [步驟7] render()
+   把最新資料重新畫到畫面。
+   包含：
+   - 即時庫存表
+   - 交易紀錄
+   - 今日入庫
+   - 今日出庫
+   - 總庫存
+   - 低庫存警示
+   -------------------------------------------------------------------------- */
+function render(){
+ $("stockBody").innerHTML=products.map(p=>`<tr><td>${p.code}</td><td>${p.name}</td><td>${p.loc}</td><td><b>${p.stock}</b></td><td><span class="badge ${p.stock<=5?"low":"normal"}">${p.stock<=5?"低庫存":"正常"}</span></td></tr>`).join("");
+ $("historyBody").innerHTML=history.length?history.map(h=>`<tr><td>${h.time}</td><td>${h.code}</td><td>${h.name}</td><td>${h.type}</td><td>${h.qty}</td><td>${h.after}</td></tr>`).join(""):`<tr><td colspan="6" class="muted">尚無交易紀錄</td></tr>`;
+ let today=new Date().toLocaleDateString("zh-TW");
+ $("todayIn").textContent=history.filter(h=>h.date===today&&h.type==="入庫").reduce((a,h)=>a+h.qty,0);
+ $("todayOut").textContent=history.filter(h=>h.date===today&&h.type==="出庫").reduce((a,h)=>a+h.qty,0);
+ $("totalStock").textContent=products.reduce((a,p)=>a+p.stock,0);
+ let lows=products.filter(p=>p.stock<=5);
+ $("lowStock").innerHTML=lows.length?lows.map(p=>`<p><b>${p.code} ${p.name}</b>｜${p.loc}｜剩餘 ${p.stock} 件</p>`).join(""):"目前沒有低庫存商品。";
+}
+/* --------------------------------------------------------------------------
+   [步驟8] exportCSV()
+   把 history 交易紀錄轉成 CSV，讓使用者可以用 Excel 開啟。
+   -------------------------------------------------------------------------- */
+function exportCSV(){
+ let rows=[["時間","商品編號","商品名稱","作業","數量","作業後庫存"],...history.map(h=>[h.time,h.code,h.name,h.type,h.qty,h.after])];
+ let csv="\ufeff"+rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");
+ let a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="WMS交易紀錄.csv";a.click();
+}
+/* --------------------------------------------------------------------------
+   [步驟9] resetDemo()
+   教師上下一班課前，可以按這個功能恢復初始庫存並清除交易紀錄。
+   -------------------------------------------------------------------------- */
+function resetDemo(){if(confirm("確定要清除交易紀錄並恢復初始庫存嗎？")){products=structuredClone(initialProducts);history=[];save();render();}}
+/* [步驟10] 網頁第一次開啟時，立即執行 render() 顯示所有資料。 */
+render();
+</script>
+</body></html>
